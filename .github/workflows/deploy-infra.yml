@@ -1,57 +1,275 @@
+
 name: Infrastructure CI/CD
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - .github/workflows/deploy-infra.yml
       - 'config/prod.bicepparam'
       - 'main.bicep'
 
+  issue_comment:
+    types: [created]
+
 permissions:
-  id-token: write
   contents: read
+  issues: write
+  pull-requests: read
+  id-token: write
 
 jobs:
-  # JOB 1: Runs ONLY on Pull Requests to validate the Bicep code
+
+  # JOB 1: Validate infrastructure on PR
   validate:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    environment: validation
+
+    env:
+      RG_NAME: ${{ vars.RESOURCE_GROUP }}
+
     steps:
-      - name: checkout code
-        uses: actions/checkout@v3
-      - name: azure login
+      - name: Checkout PR
+        id: checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        id: azure_login
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
       - name: Validate Bicep Syntax & What-If
+        id: what_if
         uses: azure/cli@v2
         with:
-          inlineScript:
+          inlineScript: |
             az deployment group what-if \
-              --resource-group "quatigence-prod-resource" \
+              --resource-group "$RG_NAME" \
               --parameters ./config/prod.bicepparam
 
-  # JOB 2: Runs ONLY when code is merged/pushed to main
-  deploy:
-    if: github.event_name == 'push'
+      # Runs whether validation succeeds or fails
+      - name: Comment validation result
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          AZURE_LOGIN: ${{ steps.azure_login.outcome }}
+          WHAT_IF: ${{ steps.what_if.outcome }}
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+
+            const outcomes = {
+              Checkout: process.env.CHECKOUT,
+              "Azure login": process.env.AZURE_LOGIN,
+              "Bicep What-If": process.env.WHAT_IF
+            };
+
+            const success = Object.values(outcomes)
+              .every(result => result === "success");
+
+            const details = Object.entries(outcomes)
+              .map(([name, result]) => `- ${name}: ${result}`)
+              .join("\n");
+
+            const body = success
+              ? "**Infrastructure validation successful!**\n\nBicep What-If completed successfully."
+              : `**Infrastructure validation unsuccessful.**\n\n${details}\n\nPlease check the workflow logs.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });
+
+
+  
+
+  # JOB 2: Verify merged PR and revalidate infrastructure
+  verify_deploy:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      github.event.comment.body == '/deploy-prod' &&
+      contains(fromJSON(vars.DEPLOY_APPROVERS), github.actor)
+
     runs-on: ubuntu-latest
+    environment: validation
+
+    env:
+      RG_NAME: ${{ vars.RESOURCE_GROUP }}
+
+    outputs:
+      eligible: ${{ steps.verify_merge.outputs.eligible }}
+      merge_sha: ${{ steps.verify_merge.outputs.merge_sha }}
+
     steps:
-      - name: checkout code
-        uses: actions/checkout@v3
-      - name: azure login
+      - name: Verify PR merge status
+        id: verify_merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number;
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            const eligible =
+              pr.merged === true &&
+              pr.base.ref === "main" &&
+              Boolean(pr.merge_commit_sha);
+
+            core.setOutput("eligible", String(eligible));
+            core.setOutput("merge_sha", pr.merge_commit_sha || "");
+            core.setOutput("merged", String(pr.merged));
+            core.setOutput("base_branch", pr.base.ref);
+
+      - name: Enforce merge requirement
+        if: steps.verify_merge.outputs.eligible != 'true'
+        run: |
+          echo "::error::PR must be merged into main before deployment."
+          exit 1
+
+      - name: Checkout merged commit
+        id: checkout
+        if: steps.verify_merge.outputs.eligible == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.verify_merge.outputs.merge_sha }}
+
+      - name: Azure login using validation identity
+        id: azure_login
+        if: steps.verify_merge.outputs.eligible == 'true'
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Deploy to Azure
+
+      - name: Revalidate merged infrastructure
+        id: what_if
+        if: steps.verify_merge.outputs.eligible == 'true'
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            az deployment group what-if \
+              --resource-group "$RG_NAME" \
+              --parameters ./config/prod.bicepparam \
+              --validation-level ProviderNoRbac
+
+      # Report verification and validation result
+      - name: Comment verification result
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          VERIFY_OUTCOME: ${{ steps.verify_merge.outcome }}
+          PR_ELIGIBLE: ${{ steps.verify_merge.outputs.eligible }}
+          PR_MERGED: ${{ steps.verify_merge.outputs.merged }}
+          PR_BASE: ${{ steps.verify_merge.outputs.base_branch }}
+          MERGE_SHA: ${{ steps.verify_merge.outputs.merge_sha }}
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          AZURE_LOGIN: ${{ steps.azure_login.outcome }}
+          WHAT_IF: ${{ steps.what_if.outcome }}
+        with:
+          script: |
+            const prNumber = context.issue.number;
+
+            let body;
+
+            if (process.env.VERIFY_OUTCOME !== "success") {
+              body = "**Could not verify PR merge status.**\n\nDeployment was not performed. Check workflow logs.";
+
+            } else if (process.env.PR_ELIGIBLE !== "true") {
+              body = `**Deployment not started.**\n\nPR #${prNumber} must be merged into main.\n\nMerged: ${process.env.PR_MERGED}\nTarget branch: ${process.env.PR_BASE}`;
+
+            } else if (
+              process.env.CHECKOUT === "success" &&
+              process.env.AZURE_LOGIN === "success" &&
+              process.env.WHAT_IF === "success"
+            ) {
+              body = `**Post-merge infrastructure validation successful!**\n\nMerge commit: \`${process.env.MERGE_SHA}\`\n\nWaiting for production environment approval.`;
+
+            } else {
+              body = `**Post-merge infrastructure validation unsuccessful.**\n\n- Checkout: ${process.env.CHECKOUT}\n- Azure login: ${process.env.AZURE_LOGIN}\n- What-If: ${process.env.WHAT_IF}\n\nProduction deployment will not proceed. Check workflow logs.`;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });
+
+
+  # JOB 3: Deploy after verification and production approval
+  deploy:
+    needs: verify_deploy
+    if: >-
+      needs.verify_deploy.result == 'success' &&
+      needs.verify_deploy.outputs.eligible == 'true'
+
+    runs-on: ubuntu-latest
+    environment: prod
+
+    env:
+      RG_NAME: ${{ vars.RESOURCE_GROUP }}
+
+    steps:
+      - name: Checkout verified merge commit
+        id: checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.verify_deploy.outputs.merge_sha }}
+
+      - name: Azure login using production identity
+        id: azure_login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy infrastructure
+        id: deployment
         uses: azure/cli@v2
         with:
           inlineScript: |
             az deployment group create \
-              --name "mlops-infra-deployment-dev" \
-              --resource-group "quatigence-prod-resource" \
+              --name "quanti-infra-prod-${GITHUB_RUN_ID}" \
+              --resource-group "$RG_NAME" \
               --parameters ./config/prod.bicepparam
+
+      - name: Comment deployment result
+        if: always()
+        uses: actions/github-script@v7
+        env:
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          AZURE_LOGIN: ${{ steps.azure_login.outcome }}
+          DEPLOYMENT: ${{ steps.deployment.outcome }}
+        with:
+          script: |
+            const prNumber = context.issue.number;
+
+            const success =
+              process.env.CHECKOUT === "success" &&
+              process.env.AZURE_LOGIN === "success" &&
+              process.env.DEPLOYMENT === "success";
+
+            const body = success
+              ? "**Infrastructure deployment successful!**\n\nProduction deployment completed successfully."
+              : `**Infrastructure deployment unsuccessful.**\n\n- Checkout: ${process.env.CHECKOUT}\n- Azure login: ${process.env.AZURE_LOGIN}\n- Deployment: ${process.env.DEPLOYMENT}\n\nPlease inspect the workflow logs.`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body
+            });
