@@ -115,7 +115,7 @@ module machineLearningCompute 'machinelearningcompute.bicep' = {
 }
 
 resource dataStore 'Microsoft.MachineLearningServices/workspaces/dataStores@2022-05-01' = {
-  name: '${machineLearningName}_ds'
+  name: 'mldatastore_001'
   parent: machineLearning
   properties: {
     accountName: storageAccountName
