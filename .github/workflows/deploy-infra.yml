@@ -96,6 +96,7 @@ jobs:
       github.event.issue.pull_request != null &&
       github.event.comment.body == '/deploy-prod' &&
       contains(fromJSON(vars.DEPLOY_APPROVERS), github.actor)
+      
 
     runs-on: ubuntu-latest
     environment: validation
