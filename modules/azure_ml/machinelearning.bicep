@@ -130,14 +130,14 @@ resource dataStore 'Microsoft.MachineLearningServices/workspaces/dataStores@2022
     datastoreType: 'AzureBlob'
     description: ''
     endpoint: environmentObject.suffixes.storage
-    serviceDataAccessAuthIdentity: 'None'
+    serviceDataAccessAuthIdentity: 'WorkspaceSystemAssignedIdentity'
   }
 }
 
 module roleassignment 'roleassignment.bicep' = {
   name: 'machineLearningRoleAssignments'
   params: {
-    principalIDML: machineLearning.identity.principalId
+    // principalIDML: machineLearning.identity.principalId
     principalIDComInstance: machineLearningCompute.outputs.instanceIdentity
     principalIDMLCompCluster: machineLearningCompute.outputs.clusterIdentity
   }
