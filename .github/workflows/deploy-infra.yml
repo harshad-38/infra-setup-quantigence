@@ -15,7 +15,7 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: read
+  pull-requests: write
   id-token: write
 
 jobs:
@@ -49,7 +49,8 @@ jobs:
           inlineScript: |
             az deployment group what-if \
               --resource-group "$RG_NAME" \
-              --parameters ./config/prod.bicepparam
+              --parameters ./config/prod.bicepparam \
+              --validation-level ProviderNoRbac
 
       # Runs whether validation succeeds or fails
       - name: Comment validation result
@@ -87,8 +88,6 @@ jobs:
               body
             });
 
-
-  
 
   # JOB 2: Verify merged PR and revalidate infrastructure
   verify_deploy:
@@ -153,17 +152,6 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Revalidate merged infrastructure
-        id: what_if
-        if: steps.verify_merge.outputs.eligible == 'true'
-        uses: azure/cli@v2
-        with:
-          inlineScript: |
-            az deployment group what-if \
-              --resource-group "$RG_NAME" \
-              --parameters ./config/prod.bicepparam \
-              --validation-level ProviderNoRbac
 
       # Report verification and validation result
       - name: Comment verification result
