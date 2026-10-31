@@ -96,7 +96,7 @@ jobs:
       github.event.issue.pull_request != null &&
       github.event.comment.body == '/deploy-prod' &&
       contains(fromJSON(vars.DEPLOY_APPROVERS), github.actor)
-      
+
 
     runs-on: ubuntu-latest
     environment: validation
@@ -166,7 +166,6 @@ jobs:
           MERGE_SHA: ${{ steps.verify_merge.outputs.merge_sha }}
           CHECKOUT: ${{ steps.checkout.outcome }}
           AZURE_LOGIN: ${{ steps.azure_login.outcome }}
-          WHAT_IF: ${{ steps.what_if.outcome }}
         with:
           script: |
             const prNumber = context.issue.number;
@@ -182,7 +181,6 @@ jobs:
             } else if (
               process.env.CHECKOUT === "success" &&
               process.env.AZURE_LOGIN === "success" &&
-              process.env.WHAT_IF === "success"
             ) {
               body = `**Post-merge infrastructure validation successful!**\n\nMerge commit: \`${process.env.MERGE_SHA}\`\n\nWaiting for production environment approval.`;
 
