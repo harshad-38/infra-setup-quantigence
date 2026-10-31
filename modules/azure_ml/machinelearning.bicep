@@ -134,12 +134,30 @@ resource dataStore 'Microsoft.MachineLearningServices/workspaces/dataStores@2022
   }
 }
 
-module roleassignment 'roleassignment.bicep' = {
-  name: 'machineLearningRoleAssignments'
+@description('Built-in roles assigned to the ML compute instance')
+param roleDefinitionIds string[] = [
+  'acdd72a7-3385-48ef-bd42-f606fba81ae7'
+  'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+  '7f951dda-4ed3-4680-a7ca-43fe172d538d'
+  '4633458b-17de-408a-b874-0445c86b69e6'
+  '3913510d-42f4-4e42-8a64-420c390055eb'
+]
+
+module roleAssignmentInstance 'roleassignment.bicep' = {
+  name: 'computeInstanceRoleAssignment'
   params: {
     // principalIDML: machineLearning.identity.principalId
-    principalIDComInstance: machineLearningCompute.outputs.instanceIdentity
-    principalIDMLCompCluster: machineLearningCompute.outputs.clusterIdentity
+    principalID: machineLearningCompute.outputs.instanceIdentity
+    roleDefinitionIds: roleDefinitionIds
+  }
+}
+
+module roleAssignmentCluster 'roleassignment.bicep' = {
+  name: 'computeClusterRoleAssignment'
+  params: {
+    // principalIDML: machineLearning.identity.principalId
+    principalID: machineLearningCompute.outputs.clusterIdentity
+    roleDefinitionIds: roleDefinitionIds
   }
 }
 

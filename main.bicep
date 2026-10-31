@@ -162,3 +162,43 @@ module azuremlWorkspace 'modules/azure_ml/machinelearning.bicep' = {
   }
 }
 
+module cosmosDBAccount 'modules/azure_ml/cosmos-db.bicep' = {
+  name: 'mlw-${name}-${uniqueSuffix}-cosmos'
+  params:{
+    tags: tags
+    resourceName: 'cosmos${name}${uniqueSuffix}'
+  }
+}
+
+module servicebus 'modules/azure_ml/service-bus.bicep' = {
+  name: 'service${name}${uniqueSuffix}'
+  params: {
+    location: location
+    serviceBusNamespaceName: 'service${name}${uniqueSuffix}'
+    serviceBusQueueName: 'queue${name}${uniqueSuffix}'
+  }
+}
+
+module containerAppJob 'modules/azure_ml/container-apps.bicep' = {
+  name: 'container-app-job'
+  params: {
+    location: location
+    // Cosmos DB parameters to be provided to the container app job
+    cosmosAccountName: cosmosDBAccount.outputs.cosmosAccountName
+    cosmosDatabaseName: cosmosDBAccount.outputs.databaseName
+    cosmosContainerName: cosmosDBAccount.outputs.containerName
+
+    // Service Bus parameters to be provided to the container app job
+    serviceBusNamespaceName: servicebus.outputs.serviceBusNamespaceName
+    serviceBusQueueName: servicebus.outputs.serviceBusQueueName
+    fullyQualifiedNamespace: servicebus.outputs.fullyQualifiedNamespace
+
+    // log Analytics wrokspace name for monitoring of the job
+    logAnalyticsWorkspaceName: applicationInsights.outputs.logAnalyticsWorkspaceName
+
+    // Machine Learning Workspace Name
+    mlWorkspaceName: azuremlWorkspace.name
+
+  }
+}
+

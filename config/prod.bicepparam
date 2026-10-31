@@ -2,6 +2,7 @@ using '../main.bicep'
 
 param amlComputeDefaultVmSize = 'Standard_D2s_v3'
 param amlComputePublicIp = true
+
 // param azureBastionSubnetPrefix = '192.168.250.0/27'
 // param deployJumphost = true
 // param dsvmJumpboxPassword = 'alphaCoder@1234'
