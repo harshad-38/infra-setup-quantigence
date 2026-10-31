@@ -170,11 +170,31 @@ resource job 'Microsoft.App/jobs@2025-01-01' = {
   }
 }
 
+param cosmosDataContributorRoleID string= '00000000-0000-0000-0000-000000000002'
+
+resource cosmosDataContributorRole 'Microsoft.DocumentDB/databaseAccounts/sqlRoleDefinitions@2024-05-15' existing = {
+  parent: cosmosAccount
+  name: cosmosDataContributorRoleID
+}
+
+resource cosmosDataContributor 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignments@2024-05-15' = {
+  parent: cosmosAccount
+  name: guid(
+    cosmosAccount.id,
+    cosmosDataContributorRole.id,
+    cosmosAccount.id
+  )
+  properties: {
+    principalId: job.identity.principalId
+    roleDefinitionId: cosmosDataContributorRole.id
+    scope: cosmosAccount.id
+  }
+}
 
 module roleAssignments 'roleassignment.bicep' = {
   name: 'roleAssignmentContainerAppsJobs'
   params: {
     principalID: job.identity.principalId
-    roleDefinitionIds: ['4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0','00000000-0000-0000-0000-000000000002','f6c7c914-8db3-469d-8ca1-694a8f32e121','7f951dda-4ed3-4680-a7ca-43fe172d538d']
+    roleDefinitionIds: ['4f6d3b9b-027b-4f4c-9142-0e5a2a2247e0','f6c7c914-8db3-469d-8ca1-694a8f32e121','7f951dda-4ed3-4680-a7ca-43fe172d538d']
   }
 }
