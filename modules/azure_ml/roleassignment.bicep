@@ -1,8 +1,8 @@
-@description('Principal Id to which the role has to be assigned')
-param principalIDML string
+// @description('Principal Id to which the role has to be assigned')
+// param principalIDML string
 
-@description('Role defintion ID which consists of priviledges to be granted to ML Workspace')
-param roleDefinitionIDML string = 'b78c5d69-af96-48a3-bf8d-a8b4d589de94'
+// @description('Role defintion ID which consists of priviledges to be granted to ML Workspace')
+// param roleDefinitionIDML string = 'b78c5d69-af96-48a3-bf8d-a8b4d589de94'
 
 @description('Role defintion ID which consists of priviledges to be granted to ML compute cluster')
 param roleDefinitionIDMLCompInstance array = ['acdd72a7-3385-48ef-bd42-f606fba81ae7', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe','7f951dda-4ed3-4680-a7ca-43fe172d538d','4633458b-17de-408a-b874-0445c86b69e6']
@@ -16,8 +16,8 @@ param principalIDComInstance string
 @description('Principal ID of the compute cluster attched to Machine Learning workspace')
 param principalIDMLCompCluster string
 
-@description('Unique Name that will be assigned to the Role Assignment')
-var roleAssignmentNameML = guid(principalIDML, roleDefinitionIDML, resourceGroup().id)
+// @description('Unique Name that will be assigned to the Role Assignment')
+// var roleAssignmentNameML = guid(principalIDML, roleDefinitionIDML, resourceGroup().id)
 
 // @description('Unique Name that will be assigned to the Role Assignment')
 // var roleAssignmentNameMLCompInstance = guid(principalIDComInstance, roleDefinitionIDMLCompInstance, resourceGroup().id)
@@ -28,14 +28,15 @@ var roleAssignmentNameML = guid(principalIDML, roleDefinitionIDML, resourceGroup
 // @description('Role Definition name which allows custom permissions to the system Assigned Workspace Identity')
 // var roleDefinitionName = guid(resourceGroup().id)
 
-resource roleAssignmentML 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: roleAssignmentNameML
-  properties:{
-    principalId: principalIDML
-    principalType: 'ServicePrincipal'
-    roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionIDML)
-  }
-}
+// This is not needed because the role assignment automatically happens for the machine learning workspace
+// resource roleAssignmentML 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+//   name: roleAssignmentNameML
+//   properties:{
+//     principalId: principalIDML
+//     principalType: 'ServicePrincipal'
+//     roleDefinitionId: resourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionIDML)
+//   }
+// }
 
 resource roleAssignmentMLCompCluster 'Microsoft.Authorization/roleAssignments@2022-04-01' = [for (roleDefinitionID, index) in roleDefinitionIDCompCluster:{
   name: guid(principalIDMLCompCluster, roleDefinitionID, resourceGroup().id)
