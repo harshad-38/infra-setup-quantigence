@@ -180,7 +180,7 @@ jobs:
 
             } else if (
               process.env.CHECKOUT === "success" &&
-              process.env.AZURE_LOGIN === "success" &&
+              process.env.AZURE_LOGIN === "success"
             ) {
               body = `**Post-merge infrastructure validation successful!**\n\nMerge commit: \`${process.env.MERGE_SHA}\`\n\nWaiting for production environment approval.`;
 
