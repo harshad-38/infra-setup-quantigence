@@ -12,6 +12,9 @@ param location string = resourceGroup().location
 @description('Set of tags to apply to all resources.')
 param tags object
 
+@description('Name of the AI Foundry account to be created.')
+param aiFoundryName string
+
 // @description('Virtual network address prefix')
 // param vnetAddressPrefix string
 
@@ -202,3 +205,11 @@ module containerAppJob 'modules/azure_ml/container-apps.bicep' = {
   }
 }
 
+module foundry 'modules/foundry/account.bicep' = {
+  name: 'foundry-${name}-${uniqueSuffix}-deployment'
+  params: {
+    location: location
+    aiFoundryName: aiFoundryName
+    aiProjectName: '${aiFoundryName}-proj'
+  }
+}
